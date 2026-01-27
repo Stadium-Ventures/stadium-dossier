@@ -668,8 +668,7 @@ import { useState, useCallback } from 'react'
   // FORM FIELD COMPONENT                                                                                                                 
   // ============================================                                                                                         
   function FormField({ field, value, onChange }) {                                                                                        
-    const inputClasses = "w-full px-4 py-3 rounded-lg border border-gray-200 focus:border-black focus:ring-1 focus:ring-black outline-none
-   transition-all duration-200 text-gray-900 placeholder-gray-400 bg-white"                                                               
+    const inputClasses = "w-full px-4 py-3 rounded-lg border border-gray-200 focus:border-black focus:ring-1 focus:ring-black outline-none transition-all duration-200 text-gray-900 placeholder-gray-400 bg-white"                                                               
                                                                                                                                           
     return (                                                                                                                              
       <div className="space-y-2">                                                                                                         
