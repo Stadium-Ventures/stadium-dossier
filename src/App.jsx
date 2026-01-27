@@ -74,8 +74,7 @@ import { useState, useCallback } from 'react'
       type: 'select',                                                                                                                     
       category: 'Biographical',                                                                                                           
       audience: 'All',                                                                                                                    
-      options: ['None', 'Pitcher', 'Catcher', 'First Base', 'Second Base', 'Third Base', 'Shortstop', 'Left Field', 'Center Field', 'Right
-   Field', 'Designated Hitter', 'Utility']                                                                                                
+      options: ['None', 'Pitcher', 'Catcher', 'First Base', 'Second Base', 'Third Base', 'Shortstop', 'Left Field', 'Center Field', 'Right Field', 'Designated Hitter', 'Utility']                                                                                                
     },                                                                                                                                    
     {                                                                                                                                     
       id: 'throws',                                                                                                                       
