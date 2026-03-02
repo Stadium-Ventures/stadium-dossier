@@ -508,19 +508,11 @@ function App() {
         </div>
 
         {/* Footer Note */}
-        <div className="text-center text-sm pb-8 border-t border-gray-100 pt-8 space-y-2">
-          <p className="flex items-center justify-center gap-2 text-gray-400">
+        <div className="text-center text-gray-400 text-sm pb-8 border-t border-gray-100 pt-8">
+          <p className="flex items-center justify-center gap-2">
             <Shield className="w-4 h-4" />
             Your information is secure and handled with care.
           </p>
-          <a
-            href="https://sv-travel-hub.vercel.app/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-block text-gray-300 hover:text-gray-500 transition-colors"
-          >
-            Travel Hub
-          </a>
         </div>
       </main>
 
