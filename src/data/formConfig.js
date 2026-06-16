@@ -14,6 +14,11 @@ import {
 
 export const FORMSPREE_ENDPOINT = 'https://formspree.io/f/mykwonwn'
 
+// Graduation years are computed at load so the list never falls into the past:
+// current year through +4.
+const CURRENT_YEAR = new Date().getFullYear()
+const GRADUATION_YEARS = Array.from({ length: 5 }, (_, i) => String(CURRENT_YEAR + i))
+
 export const DEFAULT_FORM_CONFIG = [
   // THE BASICS - Biographical
   {
@@ -120,12 +125,20 @@ export const DEFAULT_FORM_CONFIG = [
 
   // HIGH SCHOOL specific fields
   {
-    id: 'parents_names',
-    label: "Parents' Names",
+    id: 'parent1_name',
+    label: 'Parent / Guardian Name',
     type: 'text',
     category: 'Biographical',
     audience: 'HighSchool',
-    placeholder: 'e.g., John & Jane Smith'
+    placeholder: 'First parent/guardian'
+  },
+  {
+    id: 'parent2_name',
+    label: 'Parent / Guardian Name (2nd, optional)',
+    type: 'text',
+    category: 'Biographical',
+    audience: 'HighSchool',
+    placeholder: 'Second parent/guardian'
   },
   {
     id: 'parent_contact',
@@ -149,7 +162,7 @@ export const DEFAULT_FORM_CONFIG = [
     type: 'select',
     category: 'Biographical',
     audience: 'HighSchool',
-    options: ['2026', '2027', '2028', '2029', '2030']
+    options: GRADUATION_YEARS
   },
   {
     id: 'travel_team',
