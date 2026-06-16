@@ -90,8 +90,22 @@ function App() {
   const [isSubmitted, setIsSubmitted] = useState(false)
   const [fieldErrors, setFieldErrors] = useState({})
 
-  // HS players are minors — a parent/legal guardian must consent on their behalf.
-  const isMinor = playerStatus === 'highschool'
+  // Parent/guardian consent is required only when the athlete is actually
+  // under 18 by date of birth — NOT merely because they're a high-schooler.
+  // (A 19-yo HS senior self-consents; a 17-yo pro/college prospect still needs
+  // a guardian.) Falls back to the HS heuristic only if DOB is missing/unparseable.
+  const ageFromDob = (() => {
+    const dobStr = formData.date_of_birth
+    if (!dobStr) return null
+    const dob = new Date(dobStr)
+    if (isNaN(dob.getTime())) return null
+    const today = new Date()
+    let age = today.getFullYear() - dob.getFullYear()
+    const m = today.getMonth() - dob.getMonth()
+    if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--
+    return age
+  })()
+  const isMinor = ageFromDob != null ? ageFromDob < 18 : playerStatus === 'highschool'
 
   // Auto-save draft to localStorage
   useEffect(() => {

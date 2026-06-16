@@ -1,3 +1,5 @@
+import CityAutocomplete from './CityAutocomplete'
+
 export default function FormField({ field, value, onChange, error }) {
   const baseClasses = "w-full px-4 py-3 rounded-lg border outline-none transition-all duration-200 text-gray-900 placeholder-gray-400 bg-white"
   const inputClasses = error
@@ -20,6 +22,15 @@ export default function FormField({ field, value, onChange, error }) {
           onChange={(e) => onChange(field.id, e.target.value)}
           placeholder={field.placeholder}
           className={inputClasses}
+        />
+      )}
+
+      {field.type === 'city' && (
+        <CityAutocomplete
+          value={value}
+          onChange={(v) => onChange(field.id, v)}
+          placeholder={field.placeholder}
+          inputClasses={inputClasses}
         />
       )}
 

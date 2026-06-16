@@ -117,7 +117,7 @@ export const DEFAULT_FORM_CONFIG = [
   {
     id: 'hometown',
     label: 'Hometown',
-    type: 'text',
+    type: 'city',
     category: 'Biographical',
     audience: 'All',
     placeholder: 'City, State'
@@ -417,7 +417,7 @@ export const DEFAULT_FORM_CONFIG = [
   {
     id: 'offseason_location',
     label: 'Offseason Location',
-    type: 'text',
+    type: 'city',
     category: 'Schedule',
     audience: 'All',
     placeholder: 'City, State'
