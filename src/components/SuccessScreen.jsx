@@ -12,9 +12,11 @@ export default function SuccessScreen({ email }) {
           Your dossier has been submitted to the Stadium Ventures team.
           We'll be in touch soon to discuss your journey.
         </p>
-        <p className="text-sm text-gray-400">
-          A confirmation has been sent to {email || 'your email'}.
-        </p>
+        {email && (
+          <p className="text-sm text-gray-400">
+            We'll reach out at {email}.
+          </p>
+        )}
       </div>
     </div>
   )

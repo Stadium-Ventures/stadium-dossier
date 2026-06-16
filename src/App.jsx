@@ -6,7 +6,9 @@ import StatusToggle from './components/StatusToggle'
 import FourPillarsSection from './components/FourPillarsSection'
 import FormSection from './components/FormSection'
 import ConsentCheckbox from './components/ConsentCheckbox'
+import GuardianConsent from './components/GuardianConsent'
 import SuccessScreen from './components/SuccessScreen'
+import { supabase, supabaseEnabled } from './lib/supabase'
 
 const DRAFT_KEY = 'stadium-dossier-draft'
 
@@ -81,17 +83,22 @@ function App() {
   const [formData, setFormData] = useState(draft?.formData || {})
   const [selectedPillars, setSelectedPillars] = useState(draft?.selectedPillars || [])
   const [consent, setConsent] = useState(draft?.consent || false)
+  const [guardianName, setGuardianName] = useState(draft?.guardianName || '')
+  const [guardianRelationship, setGuardianRelationship] = useState(draft?.guardianRelationship || '')
   const [toast, setToast] = useState({ visible: false, message: '' })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSubmitted, setIsSubmitted] = useState(false)
   const [fieldErrors, setFieldErrors] = useState({})
 
+  // HS players are minors — a parent/legal guardian must consent on their behalf.
+  const isMinor = playerStatus === 'highschool'
+
   // Auto-save draft to localStorage
   useEffect(() => {
     localStorage.setItem(DRAFT_KEY, JSON.stringify({
-      playerStatus, formData, selectedPillars, consent
+      playerStatus, formData, selectedPillars, consent, guardianName, guardianRelationship
     }))
-  }, [playerStatus, formData, selectedPillars, consent])
+  }, [playerStatus, formData, selectedPillars, consent, guardianName, guardianRelationship])
 
   // Filter fields based on player status and conditional logic
   const getVisibleFields = useCallback(() => {
@@ -171,8 +178,11 @@ function App() {
     const stepFields = visibleFields.filter((f) => f.category === stepId)
     const errors = {}
     stepFields.forEach((f) => {
-      if (f.required && !formData[f.id]) {
+      const value = formData[f.id]
+      if (f.required && !value) {
         errors[f.id] = 'This field is required'
+      } else if (f.type === 'email' && value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+        errors[f.id] = 'Please enter a valid email address'
       }
     })
 
@@ -250,7 +260,12 @@ function App() {
     }
     summary += '\n'
 
-    summary += `Data Consent: ${consent ? 'YES - Agreed' : 'NO - Not agreed'}\n`
+    if (isMinor) {
+      summary += `Data Consent: ${consent ? 'YES - Agreed by parent/guardian' : 'NO - Not agreed'}\n`
+      summary += `Consented By: ${guardianName.trim() || '(not provided)'} (${guardianRelationship || 'relationship not provided'})\n`
+    } else {
+      summary += `Data Consent: ${consent ? 'YES - Agreed by athlete' : 'NO - Not agreed'}\n`
+    }
 
     return summary
   }
@@ -273,17 +288,67 @@ function App() {
   }
 
   const handleSubmit = async () => {
-    if (!consent) {
+    // Minors require a parent/guardian to consent; everyone else self-consents.
+    if (isMinor) {
+      const errors = {}
+      if (!guardianName.trim()) errors.guardianName = 'Required'
+      if (!guardianRelationship) errors.guardianRelationship = 'Required'
+      setFieldErrors(errors)
+      if (Object.keys(errors).length > 0) {
+        showToast('Parent/guardian name and relationship are required')
+        return
+      }
+      if (!consent) {
+        showToast('A parent or guardian must accept the consent')
+        return
+      }
+    } else if (!consent) {
       showToast('Please accept the data sharing consent')
       return
     }
 
     setIsSubmitting(true)
 
+    const consentType = isMinor ? 'guardian' : 'self'
+
     const summary = generateSummary()
     const csv = await generateCSV()
     const playerName = formData.full_name || 'New Player'
 
+    // Collect every visible answer keyed by field id for the structured store.
+    const answers = {}
+    getVisibleFields().forEach((field) => {
+      answers[field.id] = formData[field.id] || ''
+    })
+
+    // `stored` flips true once the submission is durably captured by either
+    // the primary store (Supabase) or the notification pipe (Formspree).
+    let stored = false
+
+    // Primary store: Supabase. Insert-only RLS — write succeeds, no read-back.
+    if (supabaseEnabled) {
+      try {
+        const { error } = await supabase.from('dossier_submissions').insert({
+          player_type: playerStatus,
+          full_name: playerName,
+          email: formData.email || '',
+          phone: formData.phone || '',
+          four_pillars: selectedPillars,
+          consent,
+          consent_type: consentType,
+          guardian_name: isMinor ? guardianName.trim() : null,
+          guardian_relationship: isMinor ? guardianRelationship : null,
+          form_data: answers
+        })
+        if (error) throw error
+        stored = true
+      } catch (err) {
+        console.error('Supabase insert failed:', err)
+      }
+    }
+
+    // Notification pipe: Formspree. Best-effort once stored; required fallback
+    // if the Supabase write did not land.
     const submissionData = {
       _subject: `New Onboarding Dossier: ${playerName}`,
       player_name: playerName,
@@ -294,6 +359,8 @@ function App() {
         const pillar = FOUR_PILLARS.find(p => p.id === id)
         return pillar ? pillar.label : id
       }).join(', ') || 'None selected',
+      consent_type: consentType,
+      guardian: isMinor ? `${guardianName.trim()} (${guardianRelationship})` : 'N/A — self consent',
       dossier_summary: summary,
       csv_data: csv
     }
@@ -307,19 +374,22 @@ function App() {
         },
         body: JSON.stringify(submissionData)
       })
-
       if (response.ok) {
-        localStorage.removeItem(DRAFT_KEY)
-        setIsSubmitted(true)
-      } else {
+        stored = true
+      } else if (!stored) {
         throw new Error('Submission failed')
       }
     } catch (err) {
-      console.error('Submission error:', err)
-      showToast('Submission failed. Please try again.')
-    } finally {
-      setIsSubmitting(false)
+      console.error('Notification error:', err)
     }
+
+    if (stored) {
+      localStorage.removeItem(DRAFT_KEY)
+      setIsSubmitted(true)
+    } else {
+      showToast('Submission failed. Please try again.')
+    }
+    setIsSubmitting(false)
   }
 
   const fieldsByCategory = getFieldsByCategory()
@@ -409,7 +479,20 @@ function App() {
             </div>
           </div>
 
-          <ConsentCheckbox checked={consent} onChange={setConsent} />
+          {isMinor ? (
+            <GuardianConsent
+              playerName={formData.full_name}
+              guardianName={guardianName}
+              guardianRelationship={guardianRelationship}
+              onGuardianNameChange={setGuardianName}
+              onGuardianRelationshipChange={setGuardianRelationship}
+              checked={consent}
+              onChange={setConsent}
+              errors={fieldErrors}
+            />
+          ) : (
+            <ConsentCheckbox checked={consent} onChange={setConsent} />
+          )}
         </>
       )
     }

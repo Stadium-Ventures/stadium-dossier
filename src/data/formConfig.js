@@ -95,7 +95,7 @@ export const DEFAULT_FORM_CONFIG = [
   {
     id: 'email',
     label: 'Email Address',
-    type: 'text',
+    type: 'email',
     category: 'Biographical',
     audience: 'All',
     placeholder: 'your@email.com',
@@ -104,7 +104,7 @@ export const DEFAULT_FORM_CONFIG = [
   {
     id: 'phone',
     label: 'Phone Number',
-    type: 'text',
+    type: 'tel',
     category: 'Biographical',
     audience: 'All',
     placeholder: '(555) 123-4567'
@@ -149,7 +149,7 @@ export const DEFAULT_FORM_CONFIG = [
     type: 'select',
     category: 'Biographical',
     audience: 'HighSchool',
-    options: ['2025', '2026', '2027', '2028', '2029']
+    options: ['2026', '2027', '2028', '2029', '2030']
   },
   {
     id: 'travel_team',

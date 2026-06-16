@@ -11,9 +11,11 @@ export default function FormField({ field, value, onChange, error }) {
         {field.required && <span className="text-red-500 ml-1">*</span>}
       </label>
 
-      {field.type === 'text' && (
+      {(field.type === 'text' || field.type === 'email' || field.type === 'tel') && (
         <input
-          type="text"
+          type={field.type === 'email' ? 'email' : field.type === 'tel' ? 'tel' : 'text'}
+          inputMode={field.type === 'email' ? 'email' : field.type === 'tel' ? 'tel' : undefined}
+          autoComplete={field.type === 'email' ? 'email' : field.type === 'tel' ? 'tel' : undefined}
           value={value || ''}
           onChange={(e) => onChange(field.id, e.target.value)}
           placeholder={field.placeholder}

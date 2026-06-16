@@ -19,8 +19,16 @@ export default function ConsentCheckbox({ checked, onChange }) {
           </label>
           <p className="text-sm text-gray-600 mt-1">
             I consent to sharing my health and performance data with Stadium Ventures for development purposes.
-            This information will be handled in accordance with our privacy policy and used solely to support
-            my athletic career.
+            This information will be handled in accordance with our{' '}
+            <a
+              href="/privacy.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline text-black hover:text-gray-600"
+            >
+              privacy policy
+            </a>{' '}
+            and used solely to support my athletic career.
           </p>
         </div>
         <Shield className="w-5 h-5 text-gray-400 flex-shrink-0" />
