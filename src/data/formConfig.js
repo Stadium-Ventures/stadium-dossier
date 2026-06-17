@@ -12,8 +12,6 @@ import {
   Zap
 } from 'lucide-react'
 
-export const FORMSPREE_ENDPOINT = 'https://formspree.io/f/mykwonwn'
-
 // Graduation years are computed at load so the list never falls into the past:
 // current year through +4.
 const CURRENT_YEAR = new Date().getFullYear()

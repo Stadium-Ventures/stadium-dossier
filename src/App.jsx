@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
 import { Send, ArrowRight, ArrowLeft, Shield, Loader2, Check } from 'lucide-react'
-import { DEFAULT_FORM_CONFIG, FOUR_PILLARS, SECTIONS, FORMSPREE_ENDPOINT } from './data/formConfig'
+import { DEFAULT_FORM_CONFIG, FOUR_PILLARS, SECTIONS } from './data/formConfig'
 import Toast from './components/Toast'
 import StatusToggle from './components/StatusToggle'
 import FourPillarsSection from './components/FourPillarsSection'
@@ -235,72 +235,6 @@ function App() {
     }
   }
 
-  const generateSummary = () => {
-    const visibleFields = getVisibleFields()
-    let summary = '='.repeat(50) + '\n'
-    summary += 'STADIUM VENTURES - PRE-ONBOARDING DOSSIER\n'
-    summary += '='.repeat(50) + '\n\n'
-    summary += `Player Type: ${getStatusLabel()}\n`
-    summary += `Generated: ${new Date().toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    })}\n\n`
-
-    const categories = ['Biographical', 'Preferences', 'Schedule', 'Medical']
-    categories.forEach((category) => {
-      const sectionFields = visibleFields.filter((f) => f.category === category)
-      if (sectionFields.length === 0) return
-
-      summary += `----- ${SECTIONS[category].title.toUpperCase()} -----\n`
-      sectionFields.forEach((field) => {
-        const value = formData[field.id] || '(not provided)'
-        summary += `${field.label}: ${value}\n`
-      })
-      summary += '\n'
-    })
-
-    summary += `----- FOUR PILLARS (Areas for Support) -----\n`
-    if (selectedPillars.length > 0) {
-      selectedPillars.forEach((pillarId) => {
-        const pillar = FOUR_PILLARS.find(p => p.id === pillarId)
-        if (pillar) {
-          summary += `- ${pillar.label}: ${pillar.description}\n`
-        }
-      })
-    } else {
-      summary += '(none selected)\n'
-    }
-    summary += '\n'
-
-    if (isMinor) {
-      summary += `Data Consent: ${consent ? 'YES - Agreed by parent/guardian' : 'NO - Not agreed'}\n`
-      summary += `Consented By: ${guardianName.trim() || '(not provided)'} (${guardianRelationship || 'relationship not provided'})\n`
-    } else {
-      summary += `Data Consent: ${consent ? 'YES - Agreed by athlete' : 'NO - Not agreed'}\n`
-    }
-
-    return summary
-  }
-
-  const generateCSV = async () => {
-    const { default: Papa } = await import('papaparse')
-    const visibleFields = getVisibleFields()
-    const csvData = {}
-
-    csvData['_player_type'] = playerStatus
-    csvData['_generated_date'] = new Date().toISOString()
-    csvData['_consent_given'] = consent ? 'yes' : 'no'
-    csvData['_four_pillars'] = selectedPillars.join(';')
-
-    visibleFields.forEach((field) => {
-      csvData[field.id] = formData[field.id] || ''
-    })
-
-    return Papa.unparse([csvData])
-  }
-
   const handleSubmit = async () => {
     // Minors require a parent/guardian to consent; everyone else self-consents.
     if (isMinor) {
@@ -321,12 +255,14 @@ function App() {
       return
     }
 
+    if (!supabaseEnabled) {
+      showToast('Submission is temporarily unavailable. Please try again later.')
+      return
+    }
+
     setIsSubmitting(true)
 
     const consentType = isMinor ? 'guardian' : 'self'
-
-    const summary = generateSummary()
-    const csv = await generateCSV()
     const playerName = formData.full_name || 'New Player'
 
     // Collect every visible answer keyed by field id for the structured store.
@@ -335,75 +271,30 @@ function App() {
       answers[field.id] = formData[field.id] || ''
     })
 
-    // `stored` flips true once the submission is durably captured by either
-    // the primary store (Supabase) or the notification pipe (Formspree).
-    let stored = false
-
-    // Primary store: Supabase. Insert-only RLS — write succeeds, no read-back.
-    if (supabaseEnabled) {
-      try {
-        const { error } = await supabase.from('dossier_submissions').insert({
-          player_type: playerStatus,
-          full_name: playerName,
-          email: formData.email || '',
-          phone: formData.phone || '',
-          four_pillars: selectedPillars,
-          consent,
-          consent_type: consentType,
-          guardian_name: isMinor ? guardianName.trim() : null,
-          guardian_relationship: isMinor ? guardianRelationship : null,
-          form_data: answers
-        })
-        if (error) throw error
-        stored = true
-      } catch (err) {
-        console.error('Supabase insert failed:', err)
-      }
-    }
-
-    // Notification pipe: Formspree. Best-effort once stored; required fallback
-    // if the Supabase write did not land.
-    const submissionData = {
-      _subject: `New Onboarding Dossier: ${playerName}`,
-      player_name: playerName,
-      player_type: getStatusLabel(),
-      email: formData.email || '',
-      phone: formData.phone || '',
-      four_pillars: selectedPillars.map(id => {
-        const pillar = FOUR_PILLARS.find(p => p.id === id)
-        return pillar ? pillar.label : id
-      }).join(', ') || 'None selected',
-      consent_type: consentType,
-      guardian: isMinor ? `${guardianName.trim()} (${guardianRelationship})` : 'N/A — self consent',
-      dossier_summary: summary,
-      csv_data: csv
-    }
-
+    // Supabase is the single system of record. A failed insert surfaces an
+    // error so the player can retry — nothing is silently captured elsewhere.
     try {
-      const response = await fetch(FORMSPREE_ENDPOINT, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify(submissionData)
+      const { error } = await supabase.from('dossier_submissions').insert({
+        player_type: playerStatus,
+        full_name: playerName,
+        email: formData.email || '',
+        phone: formData.phone || '',
+        four_pillars: selectedPillars,
+        consent,
+        consent_type: consentType,
+        guardian_name: isMinor ? guardianName.trim() : null,
+        guardian_relationship: isMinor ? guardianRelationship : null,
+        form_data: answers
       })
-      if (response.ok) {
-        stored = true
-      } else if (!stored) {
-        throw new Error('Submission failed')
-      }
-    } catch (err) {
-      console.error('Notification error:', err)
-    }
-
-    if (stored) {
+      if (error) throw error
       localStorage.removeItem(DRAFT_KEY)
       setIsSubmitted(true)
-    } else {
+    } catch (err) {
+      console.error('Supabase insert failed:', err)
       showToast('Submission failed. Please try again.')
+    } finally {
+      setIsSubmitting(false)
     }
-    setIsSubmitting(false)
   }
 
   const fieldsByCategory = getFieldsByCategory()
