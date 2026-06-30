@@ -9,7 +9,7 @@ import ConsentCheckbox from './components/ConsentCheckbox'
 import GuardianConsent from './components/GuardianConsent'
 import SuccessScreen from './components/SuccessScreen'
 import { supabase, supabaseEnabled } from './lib/supabase'
-import { CONSENT_POLICY_VERSION, MIN_AGE, buildConsentSnapshot } from './data/consent'
+import { CONSENT_POLICY_VERSION, MIN_AGE, buildConsentSnapshot, computeAgeFromDob, isMinorByAge, isUnderMinAge } from './data/consent'
 
 const DRAFT_KEY = 'stadium-dossier-draft'
 
@@ -95,19 +95,9 @@ function App() {
   // Parent/guardian consent is required only when the athlete is actually
   // under 18 by date of birth — NOT merely because they're a high-schooler.
   // (A 19-yo HS senior self-consents; a 17-yo pro/college prospect still needs
-  // a guardian.) Falls back to the HS heuristic only if DOB is missing/unparseable.
-  const ageFromDob = (() => {
-    const dobStr = formData.date_of_birth
-    if (!dobStr) return null
-    const dob = new Date(dobStr)
-    if (isNaN(dob.getTime())) return null
-    const today = new Date()
-    let age = today.getFullYear() - dob.getFullYear()
-    const m = today.getMonth() - dob.getMonth()
-    if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--
-    return age
-  })()
-  const isMinor = ageFromDob != null ? ageFromDob < 18 : playerStatus === 'highschool'
+  // a guardian.) Logic lives in consent.js so it's unit-tested.
+  const ageFromDob = computeAgeFromDob(formData.date_of_birth)
+  const isMinor = isMinorByAge(ageFromDob, playerStatus)
 
   // Auto-save draft to localStorage
   useEffect(() => {
@@ -204,7 +194,7 @@ function App() {
 
     // Hard age floor: the Dossier is for athletes 13+ (policy §5). Block here
     // so an under-13 can't proceed past The Basics.
-    if (stepId === 'Biographical' && ageFromDob != null && ageFromDob < MIN_AGE) {
+    if (stepId === 'Biographical' && isUnderMinAge(ageFromDob)) {
       errors['date_of_birth'] = `Athletes must be at least ${MIN_AGE} years old to complete this form.`
     }
 
@@ -246,7 +236,7 @@ function App() {
   const handleSubmit = async () => {
     // Backstop age floor in case someone reaches submit with an under-13 DOB
     // (e.g. edited after the step that blocks it).
-    if (ageFromDob != null && ageFromDob < MIN_AGE) {
+    if (isUnderMinAge(ageFromDob)) {
       showToast(`Athletes must be at least ${MIN_AGE} years old to complete this form.`)
       return
     }

@@ -36,3 +36,36 @@ export function buildConsentSnapshot({ isMinor, who, medicalSharingConsent }) {
   if (medicalSharingConsent) lines.push(medicalSharingConsentText(isMinor, who))
   return lines.join('\n\n')
 }
+
+// --- Age logic (extracted so the privacy-critical path is unit-tested) ---
+
+// Whole-years age from a date-of-birth string. Parses YYYY-MM-DD directly
+// (timezone-safe — the date input always emits that format); falls back to
+// Date parsing for anything else. Returns null if missing/unparseable.
+export function computeAgeFromDob(dobStr, now = new Date()) {
+  if (!dobStr) return null
+  let by, bm, bd
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(dobStr)
+  if (m) {
+    by = Number(m[1]); bm = Number(m[2]); bd = Number(m[3])
+  } else {
+    const d = new Date(dobStr)
+    if (isNaN(d.getTime())) return null
+    by = d.getFullYear(); bm = d.getMonth() + 1; bd = d.getDate()
+  }
+  let age = now.getFullYear() - by
+  const curMonth = now.getMonth() + 1
+  if (curMonth < bm || (curMonth === bm && now.getDate() < bd)) age--
+  return age
+}
+
+// Under 18 ⇒ a parent/guardian must consent. Falls back to the high-school
+// heuristic only when DOB is missing/unparseable.
+export function isMinorByAge(age, playerStatus) {
+  return age != null ? age < 18 : playerStatus === 'highschool'
+}
+
+// Under MIN_AGE (13) ⇒ submission blocked entirely (policy §5).
+export function isUnderMinAge(age) {
+  return age != null && age < MIN_AGE
+}
