@@ -9,6 +9,7 @@ import ConsentCheckbox from './components/ConsentCheckbox'
 import GuardianConsent from './components/GuardianConsent'
 import SuccessScreen from './components/SuccessScreen'
 import { supabase, supabaseEnabled } from './lib/supabase'
+import { CONSENT_POLICY_VERSION, MIN_AGE, buildConsentSnapshot, computeAgeFromDob, isMinorByAge, isUnderMinAge } from './data/consent'
 
 const DRAFT_KEY = 'stadium-dossier-draft'
 
@@ -83,6 +84,7 @@ function App() {
   const [formData, setFormData] = useState(draft?.formData || {})
   const [selectedPillars, setSelectedPillars] = useState(draft?.selectedPillars || [])
   const [consent, setConsent] = useState(draft?.consent || false)
+  const [consentMedicalSharing, setConsentMedicalSharing] = useState(draft?.consentMedicalSharing || false)
   const [guardianName, setGuardianName] = useState(draft?.guardianName || '')
   const [guardianRelationship, setGuardianRelationship] = useState(draft?.guardianRelationship || '')
   const [toast, setToast] = useState({ visible: false, message: '' })
@@ -93,26 +95,16 @@ function App() {
   // Parent/guardian consent is required only when the athlete is actually
   // under 18 by date of birth — NOT merely because they're a high-schooler.
   // (A 19-yo HS senior self-consents; a 17-yo pro/college prospect still needs
-  // a guardian.) Falls back to the HS heuristic only if DOB is missing/unparseable.
-  const ageFromDob = (() => {
-    const dobStr = formData.date_of_birth
-    if (!dobStr) return null
-    const dob = new Date(dobStr)
-    if (isNaN(dob.getTime())) return null
-    const today = new Date()
-    let age = today.getFullYear() - dob.getFullYear()
-    const m = today.getMonth() - dob.getMonth()
-    if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--
-    return age
-  })()
-  const isMinor = ageFromDob != null ? ageFromDob < 18 : playerStatus === 'highschool'
+  // a guardian.) Logic lives in consent.js so it's unit-tested.
+  const ageFromDob = computeAgeFromDob(formData.date_of_birth)
+  const isMinor = isMinorByAge(ageFromDob, playerStatus)
 
   // Auto-save draft to localStorage
   useEffect(() => {
     localStorage.setItem(DRAFT_KEY, JSON.stringify({
-      playerStatus, formData, selectedPillars, consent, guardianName, guardianRelationship
+      playerStatus, formData, selectedPillars, consent, consentMedicalSharing, guardianName, guardianRelationship
     }))
-  }, [playerStatus, formData, selectedPillars, consent, guardianName, guardianRelationship])
+  }, [playerStatus, formData, selectedPillars, consent, consentMedicalSharing, guardianName, guardianRelationship])
 
   // Filter fields based on player status and conditional logic
   const getVisibleFields = useCallback(() => {
@@ -200,6 +192,12 @@ function App() {
       }
     })
 
+    // Hard age floor: the Dossier is for athletes 13+ (policy §5). Block here
+    // so an under-13 can't proceed past The Basics.
+    if (stepId === 'Biographical' && isUnderMinAge(ageFromDob)) {
+      errors['date_of_birth'] = `Athletes must be at least ${MIN_AGE} years old to complete this form.`
+    }
+
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors)
       const count = Object.keys(errors).length
@@ -236,6 +234,13 @@ function App() {
   }
 
   const handleSubmit = async () => {
+    // Backstop age floor in case someone reaches submit with an under-13 DOB
+    // (e.g. edited after the step that blocks it).
+    if (isUnderMinAge(ageFromDob)) {
+      showToast(`Athletes must be at least ${MIN_AGE} years old to complete this form.`)
+      return
+    }
+
     // Minors require a parent/guardian to consent; everyone else self-consents.
     if (isMinor) {
       const errors = {}
@@ -271,6 +276,14 @@ function App() {
       answers[field.id] = formData[field.id] || ''
     })
 
+    // Snapshot the exact consent wording the user agreed to, so the record is
+    // self-describing and auditable (MHMDA: provable, scoped consent).
+    const consentTextSnapshot = buildConsentSnapshot({
+      isMinor,
+      who: playerName,
+      medicalSharingConsent: consentMedicalSharing
+    })
+
     // Supabase is the single system of record. A failed insert surfaces an
     // error so the player can retry — nothing is silently captured elsewhere.
     try {
@@ -282,6 +295,10 @@ function App() {
         four_pillars: selectedPillars,
         consent,
         consent_type: consentType,
+        consent_policy_version: CONSENT_POLICY_VERSION,
+        consent_medical_sharing: consentMedicalSharing,
+        consent_timestamp: new Date().toISOString(),
+        consent_text_snapshot: consentTextSnapshot,
         guardian_name: isMinor ? guardianName.trim() : null,
         guardian_relationship: isMinor ? guardianRelationship : null,
         form_data: answers
@@ -391,12 +408,19 @@ function App() {
               guardianRelationship={guardianRelationship}
               onGuardianNameChange={setGuardianName}
               onGuardianRelationshipChange={setGuardianRelationship}
-              checked={consent}
-              onChange={setConsent}
+              consent={consent}
+              onConsentChange={setConsent}
+              medicalSharingConsent={consentMedicalSharing}
+              onMedicalSharingChange={setConsentMedicalSharing}
               errors={fieldErrors}
             />
           ) : (
-            <ConsentCheckbox checked={consent} onChange={setConsent} />
+            <ConsentCheckbox
+              consent={consent}
+              onConsentChange={setConsent}
+              medicalSharingConsent={consentMedicalSharing}
+              onMedicalSharingChange={setConsentMedicalSharing}
+            />
           )}
         </>
       )
