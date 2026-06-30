@@ -9,6 +9,7 @@ import ConsentCheckbox from './components/ConsentCheckbox'
 import GuardianConsent from './components/GuardianConsent'
 import SuccessScreen from './components/SuccessScreen'
 import { supabase, supabaseEnabled } from './lib/supabase'
+import { CONSENT_POLICY_VERSION, MIN_AGE, buildConsentSnapshot } from './data/consent'
 
 const DRAFT_KEY = 'stadium-dossier-draft'
 
@@ -83,6 +84,7 @@ function App() {
   const [formData, setFormData] = useState(draft?.formData || {})
   const [selectedPillars, setSelectedPillars] = useState(draft?.selectedPillars || [])
   const [consent, setConsent] = useState(draft?.consent || false)
+  const [consentMedicalSharing, setConsentMedicalSharing] = useState(draft?.consentMedicalSharing || false)
   const [guardianName, setGuardianName] = useState(draft?.guardianName || '')
   const [guardianRelationship, setGuardianRelationship] = useState(draft?.guardianRelationship || '')
   const [toast, setToast] = useState({ visible: false, message: '' })
@@ -110,9 +112,9 @@ function App() {
   // Auto-save draft to localStorage
   useEffect(() => {
     localStorage.setItem(DRAFT_KEY, JSON.stringify({
-      playerStatus, formData, selectedPillars, consent, guardianName, guardianRelationship
+      playerStatus, formData, selectedPillars, consent, consentMedicalSharing, guardianName, guardianRelationship
     }))
-  }, [playerStatus, formData, selectedPillars, consent, guardianName, guardianRelationship])
+  }, [playerStatus, formData, selectedPillars, consent, consentMedicalSharing, guardianName, guardianRelationship])
 
   // Filter fields based on player status and conditional logic
   const getVisibleFields = useCallback(() => {
@@ -200,6 +202,12 @@ function App() {
       }
     })
 
+    // Hard age floor: the Dossier is for athletes 13+ (policy §5). Block here
+    // so an under-13 can't proceed past The Basics.
+    if (stepId === 'Biographical' && ageFromDob != null && ageFromDob < MIN_AGE) {
+      errors['date_of_birth'] = `Athletes must be at least ${MIN_AGE} years old to complete this form.`
+    }
+
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors)
       const count = Object.keys(errors).length
@@ -236,6 +244,13 @@ function App() {
   }
 
   const handleSubmit = async () => {
+    // Backstop age floor in case someone reaches submit with an under-13 DOB
+    // (e.g. edited after the step that blocks it).
+    if (ageFromDob != null && ageFromDob < MIN_AGE) {
+      showToast(`Athletes must be at least ${MIN_AGE} years old to complete this form.`)
+      return
+    }
+
     // Minors require a parent/guardian to consent; everyone else self-consents.
     if (isMinor) {
       const errors = {}
@@ -271,6 +286,14 @@ function App() {
       answers[field.id] = formData[field.id] || ''
     })
 
+    // Snapshot the exact consent wording the user agreed to, so the record is
+    // self-describing and auditable (MHMDA: provable, scoped consent).
+    const consentTextSnapshot = buildConsentSnapshot({
+      isMinor,
+      who: playerName,
+      medicalSharingConsent: consentMedicalSharing
+    })
+
     // Supabase is the single system of record. A failed insert surfaces an
     // error so the player can retry — nothing is silently captured elsewhere.
     try {
@@ -282,6 +305,10 @@ function App() {
         four_pillars: selectedPillars,
         consent,
         consent_type: consentType,
+        consent_policy_version: CONSENT_POLICY_VERSION,
+        consent_medical_sharing: consentMedicalSharing,
+        consent_timestamp: new Date().toISOString(),
+        consent_text_snapshot: consentTextSnapshot,
         guardian_name: isMinor ? guardianName.trim() : null,
         guardian_relationship: isMinor ? guardianRelationship : null,
         form_data: answers
@@ -391,12 +418,19 @@ function App() {
               guardianRelationship={guardianRelationship}
               onGuardianNameChange={setGuardianName}
               onGuardianRelationshipChange={setGuardianRelationship}
-              checked={consent}
-              onChange={setConsent}
+              consent={consent}
+              onConsentChange={setConsent}
+              medicalSharingConsent={consentMedicalSharing}
+              onMedicalSharingChange={setConsentMedicalSharing}
               errors={fieldErrors}
             />
           ) : (
-            <ConsentCheckbox checked={consent} onChange={setConsent} />
+            <ConsentCheckbox
+              consent={consent}
+              onConsentChange={setConsent}
+              medicalSharingConsent={consentMedicalSharing}
+              onMedicalSharingChange={setConsentMedicalSharing}
+            />
           )}
         </>
       )
