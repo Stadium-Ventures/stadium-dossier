@@ -1,34 +1,43 @@
-import { useEffect, useRef, useState } from 'react'
-
-// Full US state/territory name → 2-letter abbreviation, so suggestions read
-// "New York, NY" rather than "New York, New York, United States".
-const STATE_ABBR = {
-  Alabama: 'AL', Alaska: 'AK', Arizona: 'AZ', Arkansas: 'AR', California: 'CA',
-  Colorado: 'CO', Connecticut: 'CT', Delaware: 'DE', 'District of Columbia': 'DC',
-  Florida: 'FL', Georgia: 'GA', Hawaii: 'HI', Idaho: 'ID', Illinois: 'IL',
-  Indiana: 'IN', Iowa: 'IA', Kansas: 'KS', Kentucky: 'KY', Louisiana: 'LA',
-  Maine: 'ME', Maryland: 'MD', Massachusetts: 'MA', Michigan: 'MI', Minnesota: 'MN',
-  Mississippi: 'MS', Missouri: 'MO', Montana: 'MT', Nebraska: 'NE', Nevada: 'NV',
-  'New Hampshire': 'NH', 'New Jersey': 'NJ', 'New Mexico': 'NM', 'New York': 'NY',
-  'North Carolina': 'NC', 'North Dakota': 'ND', Ohio: 'OH', Oklahoma: 'OK',
-  Oregon: 'OR', Pennsylvania: 'PA', 'Rhode Island': 'RI', 'South Carolina': 'SC',
-  'South Dakota': 'SD', Tennessee: 'TN', Texas: 'TX', Utah: 'UT', Vermont: 'VT',
-  Virginia: 'VA', Washington: 'WA', 'West Virginia': 'WV', Wisconsin: 'WI',
-  Wyoming: 'WY', 'Puerto Rico': 'PR',
-}
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 /**
- * Free-text city input with live autocomplete via OpenStreetMap's Nominatim
- * geocoder. Debounced; queries only at 3+ chars. Selecting a suggestion writes
- * a clean "City, ST" (US) or "City, State, Country" (intl) string. Falls back
- * to plain text if the lookup fails, so it never blocks the form.
+ * Free-text city input with autocomplete from a bundled, offline US-cities list.
+ * The list (~30k cities, popularity-ranked) is lazy-loaded via dynamic import on
+ * first focus, so it stays out of the main bundle and — importantly — NO data
+ * ever leaves the app. The field remains free text, so a city not in the list
+ * can still be typed.
  */
+
+// Module-level cache so the ~480KB list is parsed at most once per session,
+// shared across every city field.
+let citiesPromise = null
+function loadCities() {
+  if (!citiesPromise) {
+    citiesPromise = import('../data/usCities.js').then((m) => m.US_CITIES)
+  }
+  return citiesPromise
+}
+
+function rankMatches(cities, query) {
+  const q = query.trim().toLowerCase()
+  if (q.length < 2) return []
+  const starts = []
+  const contains = []
+  for (const c of cities) {
+    const lc = c.toLowerCase()
+    if (lc.startsWith(q)) starts.push(c)
+    else if (lc.includes(q)) contains.push(c)
+    // `cities` is pre-sorted by population, so the first hits we collect are
+    // already the most common — stop once we have plenty.
+    if (starts.length >= 8) break
+  }
+  return [...starts, ...contains].slice(0, 8)
+}
+
 export default function CityAutocomplete({ value, onChange, placeholder, inputClasses }) {
-  const [suggestions, setSuggestions] = useState([])
+  const [cities, setCities] = useState(null)
   const [open, setOpen] = useState(false)
   const containerRef = useRef(null)
-  const abortRef = useRef(null)
-  const justSelected = useRef(false)
 
   useEffect(() => {
     function onDocClick(e) {
@@ -38,49 +47,18 @@ export default function CityAutocomplete({ value, onChange, placeholder, inputCl
     return () => document.removeEventListener('mousedown', onDocClick)
   }, [])
 
-  useEffect(() => {
-    // Don't re-query the value we just set from a click.
-    if (justSelected.current) { justSelected.current = false; return }
-    const q = (value || '').trim()
-    if (q.length < 3) { setSuggestions([]); setOpen(false); return }
+  // Suggestions are pure-derived from (value, loaded list) — no effect/state.
+  const suggestions = useMemo(
+    () => (cities ? rankMatches(cities, value || '') : []),
+    [cities, value]
+  )
 
-    const timer = setTimeout(async () => {
-      try {
-        abortRef.current?.abort()
-        const ctrl = new AbortController()
-        abortRef.current = ctrl
-        const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=5&q=${encodeURIComponent(q)}`
-        const res = await fetch(url, { signal: ctrl.signal, headers: { Accept: 'application/json' } })
-        if (!res.ok) return
-        const data = await res.json()
-        const seen = new Set()
-        const opts = []
-        for (const r of data) {
-          const a = r.address || {}
-          const city = a.city || a.town || a.village || a.hamlet || a.municipality
-          if (!city) continue
-          const isUS = a.country_code === 'us'
-          const st = isUS ? (STATE_ABBR[a.state] || a.state) : a.state
-          const label = isUS && st
-            ? `${city}, ${st}`
-            : [city, a.state, a.country].filter(Boolean).join(', ')
-          if (seen.has(label)) continue
-          seen.add(label)
-          opts.push(label)
-        }
-        setSuggestions(opts)
-        setOpen(opts.length > 0)
-      } catch (e) {
-        if (e.name !== 'AbortError') { setSuggestions([]); setOpen(false) }
-      }
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [value])
+  function ensureLoaded() {
+    if (!cities) loadCities().then(setCities)
+  }
 
   function select(label) {
-    justSelected.current = true
     onChange(label)
-    setSuggestions([])
     setOpen(false)
   }
 
@@ -89,8 +67,8 @@ export default function CityAutocomplete({ value, onChange, placeholder, inputCl
       <input
         type="text"
         value={value || ''}
-        onChange={(e) => onChange(e.target.value)}
-        onFocus={() => { if (suggestions.length > 0) setOpen(true) }}
+        onChange={(e) => { onChange(e.target.value); setOpen(true) }}
+        onFocus={() => { ensureLoaded(); setOpen(true) }}
         placeholder={placeholder}
         autoComplete="off"
         className={inputClasses}

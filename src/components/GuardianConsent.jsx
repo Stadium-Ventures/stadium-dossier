@@ -1,4 +1,5 @@
 import { Shield, Users } from 'lucide-react'
+import { baseConsentText, medicalSharingConsentText } from '../data/consent'
 
 const RELATIONSHIPS = ['Parent', 'Legal Guardian', 'Other']
 
@@ -8,8 +9,10 @@ export default function GuardianConsent({
   guardianRelationship,
   onGuardianNameChange,
   onGuardianRelationshipChange,
-  checked,
-  onChange,
+  consent,
+  onConsentChange,
+  medicalSharingConsent,
+  onMedicalSharingChange,
   errors = {}
 }) {
   const who = playerName?.trim() || 'this athlete'
@@ -75,33 +78,54 @@ export default function GuardianConsent({
           </div>
         </div>
 
+        {/* Base consent — required */}
         <div className="flex items-start gap-4 pt-2">
           <div className="flex-shrink-0 mt-0.5">
             <input
               type="checkbox"
               id="guardian-consent"
-              checked={checked}
-              onChange={(e) => onChange(e.target.checked)}
+              checked={consent}
+              onChange={(e) => onConsentChange(e.target.checked)}
               className="w-5 h-5 text-black border-gray-300 rounded focus:ring-black cursor-pointer"
             />
           </div>
           <div className="flex-1">
             <label htmlFor="guardian-consent" className="block font-semibold text-black cursor-pointer">
-              I am the parent or legal guardian of {who}.
+              Data Consent <span className="text-red-500">*</span>
             </label>
-            <p className="text-sm text-gray-600 mt-1">
-              I consent to sharing this athlete&apos;s health and performance data with Stadium Ventures
-              for development purposes. This information will be handled in accordance with our{' '}
+            <p className="text-sm text-gray-600 mt-1">{baseConsentText(true, who)}</p>
+            <p className="text-sm text-gray-500 mt-2">
+              Read our{' '}
               <a
                 href="/privacy.html"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="underline text-black hover:text-gray-600"
               >
-                privacy policy
-              </a>{' '}
-              and used solely to support the athlete&apos;s career.
+                Privacy Policy
+              </a>.
             </p>
+          </div>
+          <Shield className="w-5 h-5 text-gray-400 flex-shrink-0" />
+        </div>
+
+        {/* External-sharing consent — separate, optional opt-in */}
+        <div className="flex items-start gap-4 pt-2 border-t border-gray-200">
+          <div className="flex-shrink-0 mt-0.5">
+            <input
+              type="checkbox"
+              id="guardian-medical-sharing-consent"
+              checked={medicalSharingConsent}
+              onChange={(e) => onMedicalSharingChange(e.target.checked)}
+              className="w-5 h-5 text-black border-gray-300 rounded focus:ring-black cursor-pointer"
+            />
+          </div>
+          <div className="flex-1">
+            <label htmlFor="guardian-medical-sharing-consent" className="block font-semibold text-black cursor-pointer">
+              Second-Opinion &amp; Advisory Sharing{' '}
+              <span className="text-gray-400 font-normal">(optional)</span>
+            </label>
+            <p className="text-sm text-gray-600 mt-1">{medicalSharingConsentText(true, who)}</p>
           </div>
           <Shield className="w-5 h-5 text-gray-400 flex-shrink-0" />
         </div>
