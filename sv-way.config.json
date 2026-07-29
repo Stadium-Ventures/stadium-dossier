@@ -1,0 +1,15 @@
+{
+  "_note": "Per-repo inputs for the SV Way compliance checker (canonical copy: Stadium-Ventures/sv-registry scripts/compliance/sv-way-check.cjs). Authored 2026-07-29 (WP1 role-declaration pass); values established by reading this repo's files, not inference.",
+  "repo": "Stadium-Ventures/stadium-dossier",
+  "role": "surface",
+  "_roles_why": "Read from README.md (stock Vite template), src/App.jsx, src/lib/supabase.js, src/data/formConfig.js. This is a React/Vite athlete-intake form (multi-step dossier wizard: biographical, preferences, schedule, medical, Four Pillars, guardian consent). It is a capture-in surface: submissions are INSERTed into a Supabase table 'dossier_submissions' (insert-only RLS for the anon role — the app cannot read data back). The repo itself holds no canonical data trees; the form-field definitions live in src/data/formConfig.js as app config.",
+  "canon_trees": [],
+  "canon_doc": "THE-SV-WAY.md",
+  "canon_doc_home": false,
+  "_open_questions": [
+    "No sv-app.json at the repo root — this app is not hub-registered from the repo. Hub registration is a canonical requirement of being 'promoted'; needs to be authored or the app's status clarified.",
+    "No CLAUDE.md or project docs beyond the stock Vite README — owner, hosting, and status are undocumented in-repo.",
+    "The Supabase 'dossier_submissions' table is a store of player facts captured OUTSIDE the registry write door. Per the SV Way validation-gate model this is a source adapter — but there is no evidence anything routes submissions into sv-registry _candidates. Read-duty/one-write-door gap, recorded honestly.",
+    "Upstream/downstream unknown: which system consumes dossier_submissions, and whether players entered here are resolved against Stadium-Ventures/sv-registry canon, is not determinable from this repo."
+  ]
+}
