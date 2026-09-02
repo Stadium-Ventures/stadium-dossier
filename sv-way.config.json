@@ -10,6 +10,7 @@
     "No sv-app.json at the repo root — this app is not hub-registered from the repo. Hub registration is a canonical requirement of being 'promoted'; needs to be authored or the app's status clarified.",
     "No CLAUDE.md or project docs beyond the stock Vite README — owner, hosting, and status are undocumented in-repo.",
     "The Supabase 'dossier_submissions' table is a store of player facts captured OUTSIDE the registry write door. Per the SV Way validation-gate model this is a source adapter — but there is no evidence anything routes submissions into sv-registry _candidates. Read-duty/one-write-door gap, recorded honestly.",
-    "Upstream/downstream unknown: which system consumes dossier_submissions, and whether players entered here are resolved against Stadium-Ventures/sv-registry canon, is not determinable from this repo."
+    "Upstream/downstream unknown: which system consumes dossier_submissions, and whether players entered here are resolved against Stadium-Ventures/sv-registry canon, is not determinable from this repo.",
+    "pq-059 (2026-09-02) added a READ-ONLY projection door (api/registry-projection/[slug].js) that the SV Registry card composes: intake COMPLETENESS counts + Four Pillars selection only, resolved against registry canon FIRST via api/_lib/registry-resolve.js (brain API), bearer-gated, fails closed, and no answer value (medical answers and guardian identity included) ever crosses it. This does NOT close the _candidates gap above — submissions still do not route into sv-registry's candidate queue, and that remains open."
   ]
 }
