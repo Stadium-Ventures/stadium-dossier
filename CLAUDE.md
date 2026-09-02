@@ -7,6 +7,43 @@ repo's declared role. In short: a client-facing athlete-intake wizard
 (bio/preferences/schedule/medical/Four Pillars/guardian consent) writing to
 Supabase, insert-only.
 
+## Registry intake projection (pq-059) — read duty, wired
+
+`GET /api/registry-projection/[slug]` is this app's read-only projection into
+the SV Registry card's Performance tab. The registry composes it live
+(`sv-registry api/performance.js`) and renders it; nothing is copied into the
+registry. Contract: `sv-registry docs/performance-projection-contract.md`.
+
+- **Read duty first.** `api/_lib/registry-resolve.js` resolves the incoming
+  registry slug against canon (sv-registry `/api/brain?entity=<slug>&state=1`)
+  **before** the submissions store is read, then matches by the canonical name
+  canon returned. Unresolved, ambiguous, non-client (`is_client:false`,
+  checked first) or retired ⇒ flagged, nothing projects. It never slugifies a
+  name. Reference pattern: `sv-media-pipeline/src/brain.py`.
+- **Completeness and Four Pillars selection ONLY.** Answered/applicable counts
+  overall and per section, which pillars were selected, whether consent was
+  recorded (boolean), the submitted timestamp, and the athlete's own declared
+  `player_type`. **No answer value is ever read out of `form_data`** — only
+  whether a value is non-empty. Medical answers are counted and never read;
+  guardian identity, email and phone are not even SELECTed from the table.
+- **This is NOT the `_candidates` promotion path.** The gap noted below —
+  submissions here don't route into sv-registry's candidate queue — is
+  untouched by this door and must not be mistaken for closed. This answers a
+  narrower question the card needs: has this client filled out their intake,
+  and how completely. An intake *answer* becoming a player fact still goes
+  through the registry's write door.
+- **The door is dark until BE provisions credentials.** It needs
+  `DOSSIER_SUPABASE_URL` + `DOSSIER_SUPABASE_SERVICE_KEY` because the
+  browser's anon key is insert-only by RLS and cannot read submissions back.
+  A service-role key in a project that has never had one is a real change to
+  this app's security posture, so the code stays configured-off (503 for the
+  bearer, `store-unreachable` for the store) rather than assuming the answer.
+  Bearer-authed with `SV_REGISTRY_SERVICE_TOKEN`; **unset ⇒ 503, never open.**
+- `api/_lib/dossier-fields.js` is GENERATED from `src/data/formConfig.js`
+  (`node scripts/gen-dossier-fields.mjs`) so the serverless door needs no
+  lucide-react import. `npm run check:fields` is the drift guard — run it if
+  you change the form config.
+
 ## Known gap — read duty (open, tracked)
 
 This repo's own `sv-way.config.json` already flags that submissions here
